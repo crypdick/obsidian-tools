@@ -91,6 +91,7 @@ def main() -> None:
         sys.exit(f"Error: {target_dir} is not a valid directory")
 
     md_files = collect_markdown_files(target_dir)
+    initial_file_count = len(md_files)
     if not md_files:
         print("No Markdown files found – nothing to do.")
         return
@@ -160,12 +161,16 @@ def main() -> None:
 
     print("\nSummary:")
     if args.dry_run:
+        print(f"Starting with {initial_file_count} file(s).")
         print(f"{len(to_delete)} file(s) would be deleted.")
+        print(f"Ending with {initial_file_count - len(to_delete)} file(s).")
         print(
             f"{rename_count if rename_count else len(rename_actions)} file(s) would be renamed (subject to collisions)."
         )
     else:
+        print(f"Started with {initial_file_count} file(s).")
         print(f"{len(to_delete)} file(s) deleted.")
+        print(f"Ended with {initial_file_count - len(to_delete)} file(s).")
         print(f"{rename_count} file(s) renamed.")
 
 
