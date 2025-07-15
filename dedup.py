@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import re
 import sys
 from pathlib import Path
@@ -74,9 +73,17 @@ def collect_markdown_files(root: Path) -> List[Path]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Deduplicate Markdown files by content.")
-    parser.add_argument("directory", help="Directory containing Markdown files to deduplicate")
-    parser.add_argument("--dry-run", action="store_true", help="Preview deletions without removing files")
+    parser = argparse.ArgumentParser(
+        description="Deduplicate Markdown files by content."
+    )
+    parser.add_argument(
+        "directory", help="Directory containing Markdown files to deduplicate"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview deletions without removing files",
+    )
     args = parser.parse_args()
 
     target_dir = Path(args.directory).expanduser().resolve()
@@ -136,7 +143,9 @@ def main() -> None:
             if args.dry_run:
                 print(f"[dry-run] Skipping rename: {dest} already exists.")
             else:
-                print(f"Skipping rename of {src.name} → {dest.name}: destination exists.")
+                print(
+                    f"Skipping rename of {src.name} → {dest.name}: destination exists."
+                )
             continue
 
         if args.dry_run:
@@ -152,7 +161,9 @@ def main() -> None:
     print("\nSummary:")
     if args.dry_run:
         print(f"{len(to_delete)} file(s) would be deleted.")
-        print(f"{rename_count if rename_count else len(rename_actions)} file(s) would be renamed (subject to collisions).")
+        print(
+            f"{rename_count if rename_count else len(rename_actions)} file(s) would be renamed (subject to collisions)."
+        )
     else:
         print(f"{len(to_delete)} file(s) deleted.")
         print(f"{rename_count} file(s) renamed.")
