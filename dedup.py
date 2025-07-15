@@ -245,14 +245,6 @@ def main() -> None:
         print(f"{rename_count} file(s) renamed.")
 
         # --- Debug information -------------------------------------------------
-        if skipped_examples:
-            print("\nExample skipped renames (source vs destination):")
-            for example in skipped_examples:
-                print(example)
-            remaining = skipped_renames - len(skipped_examples)
-            if remaining > 0:
-                print(f"...and {remaining} more skip(s) not shown.")
-
         # Write detailed log file with content snippets for debugging
         if sample_entries:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
