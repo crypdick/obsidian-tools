@@ -26,6 +26,7 @@ import argparse
 import hashlib
 import re
 import sys
+import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -171,10 +172,46 @@ def main() -> None:
     # Perform pending renames **after** deletions so we avoid collisions with
     # filenames that were just removed.
     rename_count = 0
+    skipped_renames = 0  # Count of rename attempts skipped due to existing destination
+    skipped_examples: List[str] = []  # Short console messages for first few skips
+    sample_entries = []  # Detailed info (path, hash, snippets) for log file
     for src, dest in rename_actions:
         # Skip if we aren't keeping this src (it might have been deleted due
         # to earlier hash collision logic, though unlikely) or if dest exists.
         if dest.exists():
+            # Record statistics & a few illustrative examples for debugging.
+            skipped_renames += 1
+            if len(skipped_examples) < 5:  # limit to first few to avoid spam
+                try:
+                    src_hash = compute_hash(src)[:8]
+                    dest_hash = compute_hash(dest)[:8]
+                except Exception:
+                    src_hash = dest_hash = "<error>"
+                skipped_examples.append(
+                    f"- {src} (hash {src_hash}) vs {dest} (hash {dest_hash})"
+                )
+
+                if len(sample_entries) < 5:
+
+                    def _snippet(path: Path, max_chars: int = 2000) -> str:
+                        try:
+                            return path.read_text(encoding="utf-8")[:max_chars]
+                        except UnicodeDecodeError:
+                            return path.read_bytes().decode("utf-8", errors="replace")[
+                                :max_chars
+                            ]
+
+                    sample_entries.append(
+                        {
+                            "src": src,
+                            "dest": dest,
+                            "src_hash": src_hash,
+                            "dest_hash": dest_hash,
+                            "src_snip": _snippet(src),
+                            "dest_snip": _snippet(dest),
+                        }
+                    )
+
             if args.dry_run:
                 print(f"[dry-run] Skipping rename: {dest} already exists.")
             else:
@@ -206,6 +243,43 @@ def main() -> None:
         print(f"{len(to_delete)} file(s) deleted.")
         print(f"Ended with {initial_file_count - len(to_delete)} file(s).")
         print(f"{rename_count} file(s) renamed.")
+
+        # --- Debug information -------------------------------------------------
+        if skipped_examples:
+            print("\nExample skipped renames (source vs destination):")
+            for example in skipped_examples:
+                print(example)
+            remaining = skipped_renames - len(skipped_examples)
+            if remaining > 0:
+                print(f"...and {remaining} more skip(s) not shown.")
+
+        # Write detailed log file with content snippets for debugging
+        if sample_entries:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            repo_root = Path(__file__).resolve().parent
+            log_path = repo_root / f"skipped_renames_{timestamp}.log"
+            try:
+                with log_path.open("w", encoding="utf-8") as lf:
+                    lf.write(
+                        "This log contains up to five examples where a rename was\n"
+                        "skipped because the destination file already existed with\n"
+                        "different content. Contents are truncated to the first 2000\n"
+                        " characters to keep the log manageable.\n\n"
+                    )
+                    for idx, entry in enumerate(sample_entries, 1):
+                        lf.write(f"===== Example {idx} =====\n")
+                        lf.write(f"Source: {entry['src']}\n")
+                        lf.write(f"Destination: {entry['dest']}\n")
+                        lf.write(f"Source hash: {entry['src_hash']}\n")
+                        lf.write(f"Destination hash: {entry['dest_hash']}\n\n")
+                        lf.write("--- Source content (truncated) ---\n")
+                        lf.write(entry["src_snip"] + "\n")
+                        lf.write("--- Destination content (truncated) ---\n")
+                        lf.write(entry["dest_snip"] + "\n\n")
+
+                print(f"Detailed skip log written to: {log_path}")
+            except OSError as exc:
+                print(f"Failed to write log file {log_path}: {exc}")
 
 
 if __name__ == "__main__":
