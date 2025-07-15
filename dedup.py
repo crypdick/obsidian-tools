@@ -33,13 +33,47 @@ from typing import Dict, List, Tuple
 NUMBERED_RE = re.compile(r"^(?P<stem>.*?)(?: \((?P<num>\d+)\))?\.md$", re.IGNORECASE)
 
 
-def compute_hash(path: Path, block_size: int = 1 << 20) -> str:
-    """Return SHA-256 hash of a file's contents."""
-    hasher = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(block_size), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+def _strip_frontmatter(text: str) -> str:
+    """Return *text* with leading YAML frontmatter removed if present.
+
+    YAML frontmatter is defined as a block that starts at the very first line
+    with a line consisting solely of three dashes ("---") and ends at the
+    next line that is also exactly "---". Both delimiter lines (opening and
+    closing) are removed along with the lines in-between. Whitespace surrounding
+    the dashes is ignored.
+    """
+
+    if not text.lstrip().startswith("---"):
+        return text  # Quick exit – no leading frontmatter
+
+    # Work line-by-line to locate the closing delimiter.
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return text  # Safety check – unexpected, but abort stripping
+
+    # Find the index of the closing '---'. Start searching from line 1.
+    for idx in range(1, len(lines)):
+        if lines[idx].strip() == "---":
+            # Return everything after the closing delimiter.
+            return "".join(lines[idx + 1 :])
+
+    # No closing delimiter – treat file as-is to avoid data loss.
+    return text
+
+
+def compute_hash(path: Path) -> str:
+    """Return SHA-256 hash of a Markdown file **excluding YAML frontmatter**."""
+
+    text: str
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        # Fallback: read as binary and decode with replacement to ensure we can hash.
+        text = path.read_bytes().decode("utf-8", errors="replace")
+
+    content_without_frontmatter = _strip_frontmatter(text)
+
+    return hashlib.sha256(content_without_frontmatter.encode("utf-8")).hexdigest()
 
 
 def numeric_suffix(filename: str) -> int:
