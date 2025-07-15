@@ -1,7 +1,13 @@
 [project]
 name = "obsidian-tools"
 version = "0.1.0"
-description = "Add your description here"
+description = "Scripts to help maintain my Obsidian 2nd brain."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.3.7",
+    "pre-commit>=3.7.0",
+]
