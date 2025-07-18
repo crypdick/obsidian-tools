@@ -5,6 +5,7 @@ description = "Scripts to help maintain my Obsidian 2nd brain."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "beartype>=0.21.0",
     "loguru>=0.7.3",
     "pyyaml>=6.0.2",
     "ruamel-yaml>=0.18.14",
@@ -20,4 +21,5 @@ dev = [
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "ty>=0.0.1a15",
 ]

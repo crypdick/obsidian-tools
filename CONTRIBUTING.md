@@ -12,6 +12,7 @@
 - Documentation and comments should be "time-less". Do add comments documenting historical trivia, e.g. "Previously, this 
   function...", or "New function that...".
 - Do not abandon unused imports.
+- Use type hints. Use `@beartype` on functions to enable run-time type checking.
 
 # Dependency management
 
@@ -33,3 +34,5 @@
 
 - Run tests with `uv run pytest tests`
 - Use test-driven development
+- Maintain high code coverage, within reason. Don't test small utility functions which are almost certainly correct.
+- Use conftest.py to reuse fixtures.

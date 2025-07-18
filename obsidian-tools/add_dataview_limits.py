@@ -4,6 +4,8 @@ from typing import List, Optional
 import re
 from loguru import logger
 
+from beartype import beartype
+
 from .common import backup_file, ask_user_confirmation, find_markdown_files
 from .logging_utils import setup_logging
 
@@ -13,6 +15,7 @@ END_BLOCK_RE = re.compile(r"^```\s*$")
 LIMIT_RE = re.compile(r"\blimit\s+\d+\b", re.IGNORECASE)
 
 
+@beartype
 def process_file(path: Path, limit_value: int) -> Optional[str]:
     """Return the modified file content (or original if no change)."""
     try:
@@ -46,6 +49,7 @@ def process_file(path: Path, limit_value: int) -> Optional[str]:
     return None
 
 
+@beartype
 def main(
     vault: Path = typer.Argument(
         ...,

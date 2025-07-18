@@ -28,6 +28,8 @@ from typing import Dict, List, Tuple
 import typer
 from loguru import logger
 
+from beartype import beartype
+
 from .common import (
     backup_file,
     ask_user_confirmation,
@@ -40,6 +42,7 @@ from .logging_utils import setup_logging
 NUMBERED_RE = re.compile(r"^(?P<stem>.*?)(?: \((?P<num>\d+)\))?\.md$", re.IGNORECASE)
 
 
+@beartype
 def numeric_suffix(filename: str) -> int:
     """Return numeric suffix if present, else 0."""
     match = NUMBERED_RE.match(filename)
@@ -49,6 +52,7 @@ def numeric_suffix(filename: str) -> int:
     return 0
 
 
+@beartype
 def find_duplicates(md_files: List[Path]) -> Dict[str, List[Path]]:
     """Group files by content hash. Returns {hash: [paths, ...]}"""
     buckets: Dict[str, List[Path]] = {}
@@ -58,6 +62,7 @@ def find_duplicates(md_files: List[Path]) -> Dict[str, List[Path]]:
     return buckets
 
 
+@beartype
 def main(
     directory: Path = typer.Argument(
         ...,

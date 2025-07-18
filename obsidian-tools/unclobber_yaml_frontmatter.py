@@ -23,6 +23,8 @@ from loguru import logger
 from ruamel.yaml import YAML
 from ruamel.yaml.representer import RoundTripRepresenter
 
+from beartype import beartype
+
 from .common import (
     backup_file,
     ask_user_confirmation,
@@ -33,6 +35,7 @@ from .logging_utils import setup_logging
 
 
 # Add a representer to handle set -> list conversion for clean YAML output
+@beartype
 def represent_set_as_list(representer: RoundTripRepresenter, data: set):
     return representer.represent_list(sorted(list(data)))
 
@@ -40,6 +43,7 @@ def represent_set_as_list(representer: RoundTripRepresenter, data: set):
 RoundTripRepresenter.add_representer(set, represent_set_as_list)
 
 
+@beartype
 def merge_frontmatters(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Merge multiple frontmatter blocks into one, handling conflicts."""
     merged: Dict[str, Any] = {}
@@ -67,6 +71,7 @@ def merge_frontmatters(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
     return merged
 
 
+@beartype
 def contains_implicit_null(yaml_str: str, data: Dict[str, Any]) -> bool:
     """Return True if *data* has any keys that map to an **implicit** null value.
 
@@ -88,6 +93,7 @@ def contains_implicit_null(yaml_str: str, data: Dict[str, Any]) -> bool:
     return False
 
 
+@beartype
 def extract_frontmatter_and_body(text: str) -> tuple[list[dict], str]:
     """
     Parses and extracts all consecutive YAML frontmatter blocks from the start
@@ -134,6 +140,7 @@ def extract_frontmatter_and_body(text: str) -> tuple[list[dict], str]:
     return frontmatters, body.strip()
 
 
+@beartype
 def process_file(file_path: Path) -> str | None:
     """
     Analyzes a single Markdown file for multiple frontmatter blocks,
@@ -167,6 +174,7 @@ def process_file(file_path: Path) -> str | None:
 # --- File System Operations ---
 
 
+@beartype
 def main(
     directory: Path = typer.Argument(
         ...,
