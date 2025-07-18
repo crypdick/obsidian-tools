@@ -12,13 +12,13 @@ Scripts to help manage my Obsidian 2nd brain
 uv pip install -r pyproject.toml --extra dev
 
 # Register the Git hooks provided by pre-commit
-uv run pre-commit install
+uvx pre-commit install
 ```
 
 ### Running the linters & formatter
 
 ```bash
 # Execute the full pre-commit suite across all files
-uv run pre-commit run --all-files
+uvx pre-commit run --all-files
 ```
 
