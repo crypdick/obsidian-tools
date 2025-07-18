@@ -59,10 +59,14 @@ def find_duplicates(md_files: List[Path]) -> Dict[str, List[Path]]:
     for path in md_files:
         h = compute_hash(path)
         buckets.setdefault(h, []).append(path)
-    return buckets
+    # Filter out non-duplicates
+    return {h: paths for h, paths in buckets.items() if len(paths) > 1}
 
 
-@beartype
+app = typer.Typer()
+
+
+@app.command()
 def main(
     directory: Path = typer.Argument(
         ...,
@@ -95,13 +99,11 @@ def main(
     to_delete: List[Path] = []
     rename_actions: List[Tuple[Path, Path]] = []
 
-    for paths in dup_groups.values():
-        if len(paths) < 2:
-            continue
-
+    for h, paths in dup_groups.items():
         paths.sort(key=lambda p: numeric_suffix(p.name))
         keep_path = paths[0]
-        to_delete.extend(paths[1:])
+        for p in paths[1:]:
+            to_delete.append(p)
 
         if numeric_suffix(keep_path.name) > 0:
             stem_match = NUMBERED_RE.match(keep_path.name)
@@ -109,6 +111,9 @@ def main(
                 unsuffixed_name = f"{stem_match.group('stem')}.md"
                 dest_path = keep_path.with_name(unsuffixed_name)
                 rename_actions.append((keep_path, dest_path))
+                # The file to be renamed should not be deleted
+                if keep_path in to_delete:
+                    to_delete.remove(keep_path)
 
     if not to_delete and not rename_actions:
         logger.info("No duplicates found.")
@@ -120,15 +125,6 @@ def main(
         ):
             logger.info("User cancelled operation.")
             return
-
-        for path in to_delete:
-            try:
-                backup_path = backup_file(path, log_dir)
-                logger.debug(f"Backed up {path} to {backup_path}")
-                path.unlink()
-                logger.info(f"Deleted {path}")
-            except OSError as e:
-                logger.error(f"Failed to delete {path}: {e}")
 
         for src, dest in rename_actions:
             if dest.exists():
@@ -143,6 +139,15 @@ def main(
                 logger.info(f"Renamed {src.name} -> {dest.name}")
             except OSError as e:
                 logger.error(f"Failed to rename {src} -> {dest}: {e}")
+
+        for path in to_delete:
+            try:
+                backup_path = backup_file(path, log_dir)
+                logger.debug(f"Backed up {path} to {backup_path}")
+                path.unlink()
+                logger.info(f"Deleted {path}")
+            except OSError as e:
+                logger.error(f"Failed to delete {path}: {e}")
     else:
         logger.info("Dry run complete. The following actions would be taken:")
         for path in to_delete:
@@ -154,4 +159,4 @@ def main(
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    app()

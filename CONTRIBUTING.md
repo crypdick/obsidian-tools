@@ -36,3 +36,4 @@
 - Use test-driven development
 - Maintain high code coverage, within reason. Don't test small utility functions which are almost certainly correct.
 - Use conftest.py to reuse fixtures.
+- If you encounter DepreciationWarning, update the code accordingly.

@@ -10,7 +10,7 @@ Scripts to help manage my Obsidian 2nd brain
 
 ```bash
 # Create (or update) the project environment and install all runtime + dev deps
-uv pip install -r pyproject.toml --extra dev
+uv pip install -e .[dev]
 
 # Register the Git hooks provided by pre-commit
 uvx pre-commit install
@@ -21,6 +21,13 @@ uvx pre-commit install
 ```bash
 # Execute the full pre-commit suite across all files
 uvx pre-commit run --all-files
+```
+
+### Running the tests
+
+```bash
+# Run the tests
+uv run pytest
 ```
 
 # Contributing

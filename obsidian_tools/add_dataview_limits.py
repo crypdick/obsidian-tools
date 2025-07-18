@@ -50,7 +50,10 @@ def process_file(path: Path, limit_value: int) -> Optional[str]:
     return None
 
 
-@beartype
+app = typer.Typer()
+
+
+@app.command()
 def main(
     vault_path: Optional[Path] = typer.Option(
         None,
@@ -124,4 +127,4 @@ def main(
 
 
 if __name__ == "__main__":
-    typer.run(main)
+    app()
