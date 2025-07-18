@@ -6,6 +6,12 @@
 - Use `.env` files for secrets.
 - Use the DRY principle. Check `common.py`, `constants.py`, etc. for existing functions that can be recycled.
 - Use `typer` instead of argparse.
+- When making edits, make sure to keep the README.md up to date.
+- Prefer simplicity. Avoid leaving zombie code. Prefer to break backwards compatibility rather than keeping old, unused
+  code.
+- Documentation and comments should be "time-less". Do add comments documenting historical trivia, e.g. "Previously, this 
+  function...", or "New function that...".
+- Do not abandon unused imports.
 
 # Dependency management
 

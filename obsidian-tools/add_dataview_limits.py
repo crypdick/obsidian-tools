@@ -1,9 +1,11 @@
-import argparse
-import re
+import typer
 from pathlib import Path
-from typing import List
-import sys
-import difflib
+from typing import List, Optional
+import re
+from loguru import logger
+
+from .common import backup_file, ask_user_confirmation, find_markdown_files
+from .logging_utils import setup_logging
 
 # Regular expressions for detecting dataview code blocks and limit clauses
 START_BLOCK_RE = re.compile(r"^```\s*dataview\s*$", re.IGNORECASE)
@@ -11,14 +13,13 @@ END_BLOCK_RE = re.compile(r"^```\s*$")
 LIMIT_RE = re.compile(r"\blimit\s+\d+\b", re.IGNORECASE)
 
 
-def find_markdown_files(root: Path) -> List[Path]:
-    """Recursively collect all markdown files under *root*."""
-    return [p for p in root.rglob("*.md") if p.is_file()]
-
-
-def process_file(path: Path, limit_value: int) -> str:
+def process_file(path: Path, limit_value: int) -> Optional[str]:
     """Return the modified file content (or original if no change)."""
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except Exception as e:
+        logger.error(f"Error reading {path}: {e}")
+        return None
 
     in_block = False
     limit_found = False
@@ -26,95 +27,86 @@ def process_file(path: Path, limit_value: int) -> str:
     output_lines: List[str] = []
 
     for line in lines:
-        # Enter dataview block
         if not in_block and START_BLOCK_RE.match(line):
             in_block = True
             limit_found = False
-            output_lines.append(line)
-            continue
-
-        # Inside a dataview block
-        if in_block:
-            if END_BLOCK_RE.match(line):  # block ends here
+        elif in_block:
+            if END_BLOCK_RE.match(line):
                 if not limit_found:
+                    # Insert LIMIT clause before the closing ```
                     output_lines.append(f"LIMIT {limit_value}\n")
                     modified = True
-                output_lines.append(line)
                 in_block = False
-                continue
-
-            if LIMIT_RE.search(line):
+            elif LIMIT_RE.search(line):
                 limit_found = True
-            output_lines.append(line)
-            continue
-
-        # Normal line outside any block
         output_lines.append(line)
 
     if modified:
         return "".join(output_lines)
-    return None  # type: ignore[return-value]
+    return None
 
 
-def apply_changes(file_path: Path, new_content: str, dry_run: bool):
-    if dry_run:
-        old_lines = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
-        new_lines = new_content.splitlines(keepends=True)
-        diff = difflib.unified_diff(
-            old_lines,
-            new_lines,
-            fromfile=str(file_path),
-            tofile=f"{file_path} (modified)",
-        )
-        sys.stdout.writelines(diff)
-    else:
-        file_path.write_text(new_content, encoding="utf-8")
-        print(f"Updated {file_path}")
+def main(
+    vault: Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        writable=True,
+        readable=True,
+        resolve_path=True,
+        help="Path to the Obsidian vault.",
+    ),
+    limit: int = typer.Option(
+        1000, "--limit", "-l", help="Value for the LIMIT clause."
+    ),
+    go: bool = typer.Option(
+        False,
+        "--go",
+        help="Actually modify files. Defaults to a dry run.",
+    ),
+):
+    """Append LIMIT to Obsidian Dataview queries recursively."""
+    log_dir = setup_logging("add_dataview_limits")
+    logger.info("Starting script...")
+    if not go:
+        logger.info("Running in dry-run mode. No files will be modified.")
 
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="Append LIMIT to Obsidian Dataview queries recursively."
-    )
-    parser.add_argument(
-        "vault",
-        nargs="?",
-        default=Path(".").resolve(),
-        type=Path,
-        help="Path to the Obsidian vault (defaults to current directory)",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=1000,
-        help="Value for the LIMIT clause (default: 1000)",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print the diff instead of modifying files",
-    )
-
-    args = parser.parse_args()
-    vault_path: Path = args.vault.expanduser().resolve()
-
-    if not vault_path.exists():
-        print(f"Vault path {vault_path} does not exist", file=sys.stderr)
-        sys.exit(1)
-
-    markdown_files = find_markdown_files(vault_path)
-    if not markdown_files:
-        print("No markdown files found.")
-        return
+    markdown_files = find_markdown_files(vault)
+    files_to_modify = []
 
     for md_file in markdown_files:
-        new_content = process_file(md_file, args.limit)
-        if new_content is not None:
-            apply_changes(md_file, new_content, args.dry_run)
+        new_content = process_file(md_file, limit)
+        if new_content:
+            files_to_modify.append((md_file, new_content))
+            logger.info(f"Identified file to modify: {md_file}")
 
-    if args.dry_run:
-        print("\nDry run complete. No files were modified.")
+    if not files_to_modify:
+        logger.info("No files to modify.")
+        return
+
+    if go:
+        if not ask_user_confirmation(
+            f"About to modify {len(files_to_modify)} files. Are you sure?"
+        ):
+            logger.info("User cancelled operation.")
+            return
+
+        for md_file, new_content in files_to_modify:
+            try:
+                backup_path = backup_file(md_file, log_dir)
+                logger.debug(f"Backed up {md_file} to {backup_path}")
+                md_file.write_text(new_content, encoding="utf-8")
+                logger.info(f"Updated {md_file}")
+            except Exception as e:
+                logger.error(f"Error updating {md_file}: {e}")
+    else:
+        logger.info("Dry run complete. The following files would be modified:")
+        for md_file, _ in files_to_modify:
+            logger.info(f"- {md_file}")
+
+    logger.info("Script finished.")
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

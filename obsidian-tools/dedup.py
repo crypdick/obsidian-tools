@@ -21,74 +21,32 @@ If all three share the same contents, only **note.md** remains.
 
 from __future__ import annotations
 
-import argparse
-import hashlib
 import re
-import sys
-import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+import typer
+from loguru import logger
+
+from .common import (
+    backup_file,
+    ask_user_confirmation,
+    find_markdown_files,
+    compute_hash,
+)
+from .logging_utils import setup_logging
 
 # Matches both "file.md" and "file (123).md" (case-insensitive on extension)
 NUMBERED_RE = re.compile(r"^(?P<stem>.*?)(?: \((?P<num>\d+)\))?\.md$", re.IGNORECASE)
 
 
-def _strip_frontmatter(text: str) -> str:
-    """Return *text* with leading YAML frontmatter removed if present.
-
-    YAML frontmatter is defined as a block that starts at the very first line
-    with a line consisting solely of three dashes ("---") and ends at the
-    next line that is also exactly "---". Both delimiter lines (opening and
-    closing) are removed along with the lines in-between. Whitespace surrounding
-    the dashes is ignored.
-    """
-
-    if not text.lstrip().startswith("---"):
-        return text  # Quick exit – no leading frontmatter
-
-    # Work line-by-line to locate the closing delimiter.
-    lines = text.splitlines(keepends=True)
-    if not lines or lines[0].strip() != "---":
-        return text  # Safety check – unexpected, but abort stripping
-
-    # Find the index of the closing '---'. Start searching from line 1.
-    for idx in range(1, len(lines)):
-        if lines[idx].strip() == "---":
-            # Return everything after the closing delimiter.
-            return "".join(lines[idx + 1 :])
-
-    # No closing delimiter – treat file as-is to avoid data loss.
-    return text
-
-
-def compute_hash(path: Path) -> str:
-    """Return SHA-256 hash of a Markdown file **excluding YAML frontmatter**."""
-
-    text: str
-    try:
-        text = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        # Fallback: read as binary and decode with replacement to ensure we can hash.
-        text = path.read_bytes().decode("utf-8", errors="replace")
-
-    content_without_frontmatter = _strip_frontmatter(text)
-
-    return hashlib.sha256(content_without_frontmatter.encode("utf-8")).hexdigest()
-
-
 def numeric_suffix(filename: str) -> int:
-    """Return numeric suffix if present, else 0.
-
-    Examples:
-        "note.md"        -> 0
-        "note (1).md"    -> 1
-        "note (12).md"   -> 12
-    """
+    """Return numeric suffix if present, else 0."""
     match = NUMBERED_RE.match(filename)
     if match:
         num = match.group("num")
         return int(num) if num is not None else 0
-    return 0  # Fallback when pattern doesn't match
+    return 0
 
 
 def find_duplicates(md_files: List[Path]) -> Dict[str, List[Path]]:
@@ -100,178 +58,95 @@ def find_duplicates(md_files: List[Path]) -> Dict[str, List[Path]]:
     return buckets
 
 
-def collect_markdown_files(root: Path) -> List[Path]:
-    """Return a list of Markdown files in *root* **recursively**."""
-    # Path.rglob traverses sub-directories too; filter on case-insensitive extension.
-    return [p for p in root.rglob("*.md") if p.is_file()]
+def main(
+    directory: Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        writable=True,
+        readable=True,
+        resolve_path=True,
+        help="Directory containing Markdown files to deduplicate.",
+    ),
+    go: bool = typer.Option(
+        False,
+        "--go",
+        help="Actually modify files. Defaults to a dry run.",
+    ),
+):
+    """Deduplicate Markdown files by content."""
+    log_dir = setup_logging("dedup")
+    logger.info(f"Starting deduplication in {directory}...")
+    if not go:
+        logger.info("Running in dry-run mode. No files will be modified.")
 
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Deduplicate Markdown files by content."
-    )
-    parser.add_argument(
-        "directory", help="Directory containing Markdown files to deduplicate"
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview deletions without removing files",
-    )
-    args = parser.parse_args()
-
-    target_dir = Path(args.directory).expanduser().resolve()
-    if not target_dir.is_dir():
-        sys.exit(f"Error: {target_dir} is not a valid directory")
-
-    md_files = collect_markdown_files(target_dir)
-    initial_file_count = len(md_files)
+    md_files = find_markdown_files(directory)
     if not md_files:
-        print("No Markdown files found – nothing to do.")
+        logger.info("No Markdown files found. Exiting.")
         return
 
     dup_groups = find_duplicates(md_files)
-
     to_delete: List[Path] = []
-    rename_actions: List[Tuple[Path, Path]] = []  # (src, dest)
+    rename_actions: List[Tuple[Path, Path]] = []
+
     for paths in dup_groups.values():
         if len(paths) < 2:
-            continue  # unique file – nothing to dedupe
+            continue
 
-        # Sort by numeric suffix ascending (0,1,2,...) so index 0 is the
-        # preferred survivor.
         paths.sort(key=lambda p: numeric_suffix(p.name))
-
         keep_path = paths[0]
         to_delete.extend(paths[1:])
 
-        # Attempt to drop numeric suffix if the kept file still has one.
         if numeric_suffix(keep_path.name) > 0:
-            # Build unsuffixed filename (e.g., "note.md")
             stem_match = NUMBERED_RE.match(keep_path.name)
             if stem_match:
                 unsuffixed_name = f"{stem_match.group('stem')}.md"
                 dest_path = keep_path.with_name(unsuffixed_name)
                 rename_actions.append((keep_path, dest_path))
 
-    if not to_delete:
-        print("No duplicates detected – all good!")
+    if not to_delete and not rename_actions:
+        logger.info("No duplicates found.")
         return
 
-    for path in to_delete:
-        if args.dry_run:
-            print(f"[dry-run] Would delete: {path}")
-        else:
+    if go:
+        if not ask_user_confirmation(
+            f"About to delete {len(to_delete)} and rename {len(rename_actions)} files. Are you sure?"
+        ):
+            logger.info("User cancelled operation.")
+            return
+
+        for path in to_delete:
             try:
+                backup_path = backup_file(path, log_dir)
+                logger.debug(f"Backed up {path} to {backup_path}")
                 path.unlink()
-                print(f"Deleted: {path}")
-            except OSError as exc:
-                print(f"Failed to delete {path}: {exc}")
+                logger.info(f"Deleted {path}")
+            except OSError as e:
+                logger.error(f"Failed to delete {path}: {e}")
 
-    # Perform pending renames **after** deletions so we avoid collisions with
-    # filenames that were just removed.
-    rename_count = 0
-    skipped_renames = 0  # Count of rename attempts skipped due to existing destination
-    skipped_examples: List[str] = []  # Short console messages for first few skips
-    sample_entries = []  # Detailed info (path, hash, snippets) for log file
-    for src, dest in rename_actions:
-        # Skip if we aren't keeping this src (it might have been deleted due
-        # to earlier hash collision logic, though unlikely) or if dest exists.
-        if dest.exists():
-            # Record statistics & a few illustrative examples for debugging.
-            skipped_renames += 1
-            if len(skipped_examples) < 5:  # limit to first few to avoid spam
-                try:
-                    src_hash = compute_hash(src)[:8]
-                    dest_hash = compute_hash(dest)[:8]
-                except Exception:
-                    src_hash = dest_hash = "<error>"
-                skipped_examples.append(
-                    f"- {src} (hash {src_hash}) vs {dest} (hash {dest_hash})"
+        for src, dest in rename_actions:
+            if dest.exists():
+                logger.warning(
+                    f"Skipping rename of {src.name} -> {dest.name}: destination exists."
                 )
-
-                if len(sample_entries) < 5:
-
-                    def _snippet(path: Path, max_chars: int = 2000) -> str:
-                        try:
-                            return path.read_text(encoding="utf-8")[:max_chars]
-                        except UnicodeDecodeError:
-                            return path.read_bytes().decode("utf-8", errors="replace")[
-                                :max_chars
-                            ]
-
-                    sample_entries.append(
-                        {
-                            "src": src,
-                            "dest": dest,
-                            "src_hash": src_hash,
-                            "dest_hash": dest_hash,
-                            "src_snip": _snippet(src),
-                            "dest_snip": _snippet(dest),
-                        }
-                    )
-
-            if args.dry_run:
-                print(f"[dry-run] Skipping rename: {dest} already exists.")
-            else:
-                print(
-                    f"Skipping rename of {src.name} → {dest.name}: destination exists."
-                )
-            continue
-
-        if args.dry_run:
-            print(f"[dry-run] Would rename: {src.name} → {dest.name}")
-        else:
+                continue
             try:
+                backup_path = backup_file(src, log_dir)
+                logger.debug(f"Backed up {src} to {backup_path}")
                 src.rename(dest)
-                print(f"Renamed: {src.name} → {dest.name}")
-                rename_count += 1
-            except OSError as exc:
-                print(f"Failed to rename {src} → {dest}: {exc}")
-
-    print("\nSummary:")
-    if args.dry_run:
-        print(f"Starting with {initial_file_count} file(s).")
-        print(f"{len(to_delete)} file(s) would be deleted.")
-        print(f"Ending with {initial_file_count - len(to_delete)} file(s).")
-        print(
-            f"{rename_count if rename_count else len(rename_actions)} file(s) would be renamed (subject to collisions)."
-        )
+                logger.info(f"Renamed {src.name} -> {dest.name}")
+            except OSError as e:
+                logger.error(f"Failed to rename {src} -> {dest}: {e}")
     else:
-        print(f"Started with {initial_file_count} file(s).")
-        print(f"{len(to_delete)} file(s) deleted.")
-        print(f"Ended with {initial_file_count - len(to_delete)} file(s).")
-        print(f"{rename_count} file(s) renamed.")
+        logger.info("Dry run complete. The following actions would be taken:")
+        for path in to_delete:
+            logger.info(f"- Would delete: {path}")
+        for src, dest in rename_actions:
+            logger.info(f"- Would rename: {src.name} -> {dest.name}")
 
-        # --- Debug information -------------------------------------------------
-        # Write detailed log file with content snippets for debugging
-        if sample_entries:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            repo_root = Path(__file__).resolve().parent
-            log_path = repo_root / f"skipped_renames_{timestamp}.log"
-            try:
-                with log_path.open("w", encoding="utf-8") as lf:
-                    lf.write(
-                        "This log contains up to five examples where a rename was\n"
-                        "skipped because the destination file already existed with\n"
-                        "different content. Contents are truncated to the first 2000\n"
-                        " characters to keep the log manageable.\n\n"
-                    )
-                    for idx, entry in enumerate(sample_entries, 1):
-                        lf.write(f"===== Example {idx} =====\n")
-                        lf.write(f"Source: {entry['src']}\n")
-                        lf.write(f"Destination: {entry['dest']}\n")
-                        lf.write(f"Source hash: {entry['src_hash']}\n")
-                        lf.write(f"Destination hash: {entry['dest_hash']}\n\n")
-                        lf.write("--- Source content (truncated) ---\n")
-                        lf.write(entry["src_snip"] + "\n")
-                        lf.write("--- Destination content (truncated) ---\n")
-                        lf.write(entry["dest_snip"] + "\n\n")
-
-                print(f"Detailed skip log written to: {log_path}")
-            except OSError as exc:
-                print(f"Failed to write log file {log_path}: {exc}")
+    logger.info("Deduplication finished.")
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)
