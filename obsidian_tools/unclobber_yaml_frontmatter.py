@@ -8,7 +8,7 @@ or concatenated frontmatter sections.
 
 Usage:
     python unclobber_yaml_frontmatter.py /path/to/vault
-    python unclobber_yaml_frontmatter.py /path/to/vault --dry-run
+    python unclobber_yaml_frontmatter.py /path/to/vault --go
 """
 
 from __future__ import annotations
@@ -189,7 +189,7 @@ def main(
     go: bool = typer.Option(
         False,
         "--go",
-        help="Actually modify files. Defaults to a dry run.",
+        help="Apply changes to files. Defaults to a dry run.",
     ),
 ):
     """Main function to parse arguments and run the script."""

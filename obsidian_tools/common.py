@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import shutil
 import hashlib
 from pathlib import Path
-from typing import List, Any
+from typing import Any
 from loguru import logger
 from datetime import datetime
 from beartype import beartype
@@ -23,10 +25,10 @@ def ask_user_confirmation(prompt: str) -> bool:
 
 
 @beartype
-def find_markdown_files(root: Path) -> List[Path]:
-    """Recursively collect all markdown files under *root*."""
+def find_markdown_files(root: Path) -> list[Path]:
+    """Recursively find all Markdown files in a directory."""
     logger.info(f"Searching for markdown files in {root}...")
-    files = [p for p in root.rglob("*.md") if p.is_file()]
+    files = list(root.rglob("*.md"))
     logger.info(f"Found {len(files)} markdown files.")
     return files
 

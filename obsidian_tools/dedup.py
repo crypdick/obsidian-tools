@@ -1,8 +1,8 @@
 """Deduplicate Markdown files in a directory based on file contents.
 
 Usage:
-    python dedup.py /path/to/dir               # perform deletion (recursive)
-    python dedup.py /path/to/dir --dry-run     # preview deletions (recursive)
+    python dedup.py /path/to/dir
+    python dedup.py /path/to/dir --go     # DANGEROUS!
 
 The script keeps **one** copy of each unique file content and removes the rest.
 When several files share the same content, the file with the **lowest** numeric
@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import typer
 from loguru import logger
@@ -53,9 +52,9 @@ def numeric_suffix(filename: str) -> int:
 
 
 @beartype
-def find_duplicates(md_files: List[Path]) -> Dict[str, List[Path]]:
+def find_duplicates(md_files: list[Path]) -> dict[str, list[Path]]:
     """Group files by content hash. Returns {hash: [paths, ...]}"""
-    buckets: Dict[str, List[Path]] = {}
+    buckets: dict[str, list[Path]] = {}
     for path in md_files:
         h = compute_hash(path)
         buckets.setdefault(h, []).append(path)
@@ -81,7 +80,7 @@ def main(
     go: bool = typer.Option(
         False,
         "--go",
-        help="Actually modify files. Defaults to a dry run.",
+        help="Apply changes to files. Defaults to a dry run.",
     ),
 ):
     """Deduplicate Markdown files by content."""
@@ -96,8 +95,8 @@ def main(
         return
 
     dup_groups = find_duplicates(md_files)
-    to_delete: List[Path] = []
-    rename_actions: List[Tuple[Path, Path]] = []
+    to_delete: list[Path] = []
+    rename_actions: list[tuple[Path, Path]] = []
 
     for h, paths in dup_groups.items():
         paths.sort(key=lambda p: numeric_suffix(p.name))
