@@ -4,7 +4,7 @@
 
 - Use idiomatic Python 3.13. This includes but is not limited to type hints.
 - Use `.env` files for secrets.
-- Use the DRY principle. Check `utils.py`, `constants.py`, etc. for existing functions that can be recycled.
+- Use the DRY principle. Check `common.py`, `constants.py`, etc. for existing functions that can be recycled.
 - Use `typer` instead of argparse.
 
 # Dependency management
