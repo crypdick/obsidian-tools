@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import List, Optional
 import re
 from loguru import logger
+import os
 
 from beartype import beartype
 
@@ -51,15 +52,15 @@ def process_file(path: Path, limit_value: int) -> Optional[str]:
 
 @beartype
 def main(
-    vault: Path = typer.Argument(
-        ...,
+    vault_path: Optional[Path] = typer.Option(
+        None,
         exists=True,
         file_okay=False,
         dir_okay=True,
         writable=True,
         readable=True,
         resolve_path=True,
-        help="Path to the Obsidian vault.",
+        help="Path to the Obsidian vault. Overrides the VAULT_PATH environment variable.",
     ),
     limit: int = typer.Option(
         1000, "--limit", "-l", help="Value for the LIMIT clause."
@@ -73,6 +74,16 @@ def main(
     """Append LIMIT to Obsidian Dataview queries recursively."""
     log_dir = setup_logging("add_dataview_limits")
     logger.info("Starting script...")
+
+    if vault_path:
+        vault = vault_path
+    else:
+        vault_env_path = os.getenv("VAULT_PATH")
+        if not vault_env_path:
+            logger.error("VAULT_PATH environment variable not set.")
+            raise typer.Exit(code=1)
+        vault = Path(vault_env_path)
+
     if not go:
         logger.info("Running in dry-run mode. No files will be modified.")
 
