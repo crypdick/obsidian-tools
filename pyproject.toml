@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Scripts to help maintain my Obsidian 2nd brain."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "pyyaml>=6.0.2",
+    "ruamel-yaml>=0.18.14",
+]
 
 [project.optional-dependencies]
 dev = [

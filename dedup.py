@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Deduplicate Markdown files in a directory based on file contents.
 
 Usage:
