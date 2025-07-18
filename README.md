@@ -23,3 +23,6 @@ uvx pre-commit install
 uvx pre-commit run --all-files
 ```
 
+# Contributing
+
+See CONTRIBUTING.md before making edits.
