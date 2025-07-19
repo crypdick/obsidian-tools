@@ -95,6 +95,8 @@ def main(
 
     md_files = find_markdown_files(directory)
     files_to_modify = {}
+    files_with_errors = 0
+    files_successfully_modified = 0
 
     for file_path in md_files:
         try:
@@ -103,14 +105,16 @@ def main(
                 files_to_modify[file_path] = new_content
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")
+            files_with_errors += 1
 
     if not files_to_modify:
         logger.info("No files found with YAML frontmatter to strip.")
-        return
+    else:
+        logger.info(
+            f"Found {len(files_to_modify)} files with YAML frontmatter to strip."
+        )
 
-    logger.info(f"Found {len(files_to_modify)} files with YAML frontmatter to strip.")
-
-    if go:
+    if go and files_to_modify:
         if not ask_user_confirmation(
             f"About to strip frontmatter from {len(files_to_modify)} files. Are you sure?"
         ):
@@ -123,12 +127,31 @@ def main(
                 logger.debug(f"Backed up {file_path} to {backup_path}")
                 file_path.write_text(new_content, "utf-8")
                 logger.info(f"Successfully stripped frontmatter from {file_path}")
+                files_successfully_modified += 1
             except IOError as e:
                 logger.error(f"Error writing to {file_path}: {e}")
-    else:
+                files_with_errors += 1
+    elif not go and files_to_modify:
         logger.info("Dry run complete. The following files would be modified:")
         for file_path in files_to_modify:
             logger.info(f"- {file_path}")
+
+    # Print summary statistics
+    logger.info("=" * 50)
+    logger.info("SUMMARY STATISTICS")
+    logger.info("=" * 50)
+    logger.info(f"Total markdown files scanned: {len(md_files)}")
+    logger.info(f"Files with frontmatter found: {len(files_to_modify)}")
+    logger.info(
+        f"Files without frontmatter: {len(md_files) - len(files_to_modify) - files_with_errors}"
+    )
+    if go:
+        logger.info(f"Files successfully modified: {files_successfully_modified}")
+        if files_with_errors > 0:
+            logger.info(f"Files with errors: {files_with_errors}")
+    else:
+        logger.info("Mode: DRY RUN (use --go to apply changes)")
+    logger.info("=" * 50)
 
     logger.info("Frontmatter stripping complete.")
 
