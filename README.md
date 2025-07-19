@@ -8,6 +8,8 @@ Scripts to help manage my Obsidian 2nd brain
  
 ## Installation
 
+Optional: set `VAULT_PATH` and `VAULT_NAME` environment variables to avoid having to pass them as arguments to the scripts. This can also be defined in the `.env` file.
+
 ```bash
 # Create (or update) the project environment and install all runtime + dev deps
 uv pip install -e '.[dev]'
