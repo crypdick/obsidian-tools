@@ -3,12 +3,13 @@
 Usage:
     python dedup.py /path/to/dir
     python dedup.py /path/to/dir --go     # DANGEROUS!
+    python dedup.py --go                  # Uses VAULT_PATH env var
 
 The script keeps **one** copy of each unique file content and removes the rest.
 When several files share the same content, the file with the **lowest** numeric
 suffix (or no suffix) is kept. If all copies have a numeric suffix (e.g.
 "note (1).md", "note (2).md"), the surviving file will be **renamed** to drop
-the suffix (→ "note.md") as long as doing so doesn’t overwrite an existing
+the suffix (→ "note.md") as long as doing so doesn't overwrite an existing
 file.
 
 Example ordering (lowest → highest suffix):
@@ -21,21 +22,23 @@ If all three share the same contents, only **note.md** remains.
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
+from typing import Optional
 
 import typer
 from loguru import logger
 
 from beartype import beartype
 
-from .common import (
+from obsidian_tools.common import (
     backup_file,
     ask_user_confirmation,
     find_markdown_files,
     compute_hash,
 )
-from .logging_utils import setup_logging
+from obsidian_tools.logging_utils import setup_logging
 
 # Matches both "file.md" and "file (123).md" (case-insensitive on extension)
 NUMBERED_RE = re.compile(r"^(?P<stem>.*?)(?: \((?P<num>\d+)\))?\.md$", re.IGNORECASE)
@@ -67,15 +70,9 @@ app = typer.Typer()
 
 @app.command()
 def main(
-    directory: Path = typer.Argument(
-        ...,
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        writable=True,
-        readable=True,
-        resolve_path=True,
-        help="Directory containing Markdown files to deduplicate.",
+    directory: Optional[Path] = typer.Argument(
+        None,
+        help="Directory containing Markdown files to deduplicate. If not provided, uses VAULT_PATH.",
     ),
     go: bool = typer.Option(
         False,
@@ -85,9 +82,34 @@ def main(
 ):
     """Deduplicate Markdown files by content."""
     log_dir = setup_logging("dedup")
-    logger.info(f"Starting deduplication in {directory}...")
+    logger.info("Starting deduplication...")
     if not go:
         logger.info("Running in dry-run mode. No files will be modified.")
+
+    if directory is None:
+        vault_path = os.getenv("VAULT_PATH")
+        if not vault_path:
+            logger.error(
+                "No directory specified and VAULT_PATH environment variable not set."
+            )
+            raise typer.Exit(1)
+        directory = Path(vault_path)
+        logger.info(f"Using directory from VAULT_PATH: {directory}")
+
+    # Validate the directory
+    if not directory.exists():
+        logger.error(f"Directory does not exist: {directory}")
+        raise typer.Exit(1)
+
+    if not directory.is_dir():
+        logger.error(f"Path is not a directory: {directory}")
+        raise typer.Exit(1)
+
+    if not os.access(directory, os.R_OK | os.W_OK):
+        logger.error(f"Directory is not readable/writable: {directory}")
+        raise typer.Exit(1)
+
+    logger.info(f"Processing directory: {directory}")
 
     md_files = find_markdown_files(directory)
     if not md_files:

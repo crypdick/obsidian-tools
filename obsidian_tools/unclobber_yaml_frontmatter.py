@@ -7,15 +7,17 @@ during version control merges, where a file might end up with duplicated
 or concatenated frontmatter sections.
 
 Usage:
-    python unclobber_yaml_frontmatter.py /path/to/vault
-    python unclobber_yaml_frontmatter.py /path/to/vault --go
+    uv run unclobber_yaml_frontmatter.py /path/to/vault
+    uv run unclobber_yaml_frontmatter.py /path/to/vault --go
+    uv run unclobber_yaml_frontmatter.py --go  # Uses VAULT_PATH env var
 """
 
 from __future__ import annotations
 import io
+import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import typer
 import yaml
@@ -25,13 +27,13 @@ from ruamel.yaml.representer import RoundTripRepresenter
 
 from beartype import beartype
 
-from .common import (
+from obsidian_tools.common import (
     backup_file,
     ask_user_confirmation,
     find_markdown_files,
     is_datestamp,
 )
-from .logging_utils import setup_logging
+from obsidian_tools.logging_utils import setup_logging
 
 
 # Add a representer to handle set -> list conversion for clean YAML output
@@ -176,15 +178,9 @@ def process_file(file_path: Path) -> str | None:
 
 @beartype
 def main(
-    directory: Path = typer.Argument(
-        ...,
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        writable=True,
-        readable=True,
-        resolve_path=True,
-        help="Directory containing Markdown files to process.",
+    directory: Optional[Path] = typer.Argument(
+        None,
+        help="Directory containing Markdown files to process. Defaults to VAULT_PATH.",
     ),
     go: bool = typer.Option(
         False,
@@ -197,6 +193,29 @@ def main(
     logger.info("Starting script...")
     if not go:
         logger.info("Running in dry-run mode. No files will be modified.")
+
+    if directory is None:
+        vault_path = os.getenv("VAULT_PATH")
+        if not vault_path:
+            logger.error(
+                "No directory specified and VAULT_PATH environment variable not set."
+            )
+            raise typer.Exit(1)
+        directory = Path(vault_path)
+        logger.info(f"Using directory from VAULT_PATH: {directory}")
+
+    # Validate the directory
+    if not directory.exists():
+        logger.error(f"Directory does not exist: {directory}")
+        raise typer.Exit(1)
+
+    if not directory.is_dir():
+        logger.error(f"Path is not a directory: {directory}")
+        raise typer.Exit(1)
+
+    if not os.access(directory, os.R_OK | os.W_OK):
+        logger.error(f"Directory is not readable/writable: {directory}")
+        raise typer.Exit(1)
 
     md_files = find_markdown_files(directory)
     files_to_modify = {}

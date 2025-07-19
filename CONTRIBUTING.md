@@ -1,6 +1,6 @@
 # Conventions used in this repo
 
-# Style
+## Style
 
 - Use idiomatic Python 3.13. This includes but is not limited to type hints.
 - Use `.env` files for secrets.
@@ -14,14 +14,14 @@
 - Do not abandon unused imports.
 - Use type hints. Use `@beartype` on functions to enable run-time type checking.
 
-# Dependency management
+## Dependency management
 
 - Do not manually edit dependencies into pyproject.toml. Use `uv add DEP` or `uv remove DEP`.
 - For dev dependencies, use `uv add --dev DEP` instead.
 - Run using `uv run examples.py`
 
 
-# Safe-guards
+## Safe-guards
 
 - Always run scripts in "dry run" mode by default, to prevent distructive edits. Use `--go` for a
   "wet run". Confirm that the user is sure with "N/y" input. 
@@ -30,10 +30,13 @@
   be rescued if needed.
 - Use loguru for logging. See `logging_utils.py` for helpers.
 
-# Testing
+## Testing
 
 - Run tests with `uv run pytest tests`
 - Use test-driven development
 - Maintain high code coverage, within reason. Don't test small utility functions which are almost certainly correct.
 - Use conftest.py to reuse fixtures.
 - If you encounter DepreciationWarning, update the code accordingly.
+
+## Tips
+- Use a TODO.md to keep track of your plans and progress.
