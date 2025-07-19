@@ -121,7 +121,8 @@ def main(
     rename_actions: list[tuple[Path, Path]] = []
 
     for h, paths in dup_groups.items():
-        paths.sort(key=lambda p: numeric_suffix(p.name))
+        # Sort by numeric suffix first, then by path length (prefer shorter paths/closer to root)
+        paths.sort(key=lambda p: (numeric_suffix(p.name), len(str(p))))
         keep_path = paths[0]
         for p in paths[1:]:
             to_delete.append(p)
@@ -131,10 +132,12 @@ def main(
             if stem_match:
                 unsuffixed_name = f"{stem_match.group('stem')}.md"
                 dest_path = keep_path.with_name(unsuffixed_name)
-                rename_actions.append((keep_path, dest_path))
-                # The file to be renamed should not be deleted
-                if keep_path in to_delete:
-                    to_delete.remove(keep_path)
+                # Only add rename action if destination doesn't exist
+                if not dest_path.exists():
+                    rename_actions.append((keep_path, dest_path))
+                    # The file to be renamed should not be deleted
+                    if keep_path in to_delete:
+                        to_delete.remove(keep_path)
 
     if not to_delete and not rename_actions:
         logger.info("No duplicates found.")
