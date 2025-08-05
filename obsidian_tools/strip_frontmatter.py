@@ -14,7 +14,6 @@ Usage:
 from __future__ import annotations
 import os
 from pathlib import Path
-from typing import Optional
 
 import typer
 from loguru import logger
@@ -27,6 +26,25 @@ from obsidian_tools.common import (
     _strip_frontmatter,
 )
 from obsidian_tools.logging_utils import setup_logging
+
+
+def get_default_directory() -> Path:
+    """Get the default directory for processing files."""
+    flashcards_path = os.getenv("FLASHCARDS_PATH")
+    if flashcards_path:
+        return Path(flashcards_path)
+    else:
+        vault_path = os.getenv("VAULT_PATH", ".")
+        return Path(vault_path) / "flashcards"
+
+
+def resolve_directory_path(directory: Path) -> Path:
+    """Resolve directory path, joining with VAULT_PATH if relative."""
+    if directory.is_absolute():
+        return directory
+    else:
+        vault_path = os.getenv("VAULT_PATH", ".")
+        return Path(vault_path) / directory
 
 
 @beartype
@@ -53,8 +71,8 @@ def process_file(file_path: Path) -> str | None:
 
 @beartype
 def main(
-    directory: Optional[Path] = typer.Argument(
-        None,
+    directory: Path = typer.Argument(
+        default_factory=get_default_directory,
         help="Directory containing Markdown files to process. Defaults to FLASHCARDS_PATH env var or VAULT_PATH/flashcards.",
     ),
     go: bool = typer.Option(
@@ -69,16 +87,9 @@ def main(
     if not go:
         logger.info("Running in dry-run mode. No files will be modified.")
 
-    if directory is None:
-        # Check for FLASHCARDS_PATH first, then fall back to VAULT_PATH/flashcards
-        flashcards_path = os.getenv("FLASHCARDS_PATH")
-        if flashcards_path:
-            directory = Path(flashcards_path)
-            logger.info(f"Using FLASHCARDS_PATH: {directory}")
-        else:
-            vault_path = os.getenv("VAULT_PATH", ".")
-            directory = Path(vault_path) / "flashcards"
-            logger.info(f"Using default flashcards directory: {directory}")
+    # Resolve the directory path (handle relative paths)
+    directory = resolve_directory_path(directory)
+    logger.info(f"Processing directory: {directory}")
 
     # Validate the directory
     if not directory.exists():
