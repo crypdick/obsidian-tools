@@ -1,3 +1,25 @@
+"""
+Append LIMIT to Obsidian Dataview queries recursively.
+
+Usage:
+    python add_dataview_limits.py --limit 1000
+    python add_dataview_limits.py --limit 1000 --go
+    python add_dataview_limits.py --limit 1000 --go --vault /path/to/vault
+
+For example, if you have a file like this:
+
+```dataview
+LIST
+```
+
+It will be modified to:
+
+```dataview
+LIST
+LIMIT 1000
+```
+"""
+
 import typer
 from pathlib import Path
 from typing import List, Optional
@@ -7,8 +29,8 @@ import os
 
 from beartype import beartype
 
-from .common import backup_file, ask_user_confirmation, find_markdown_files
-from .logging_utils import setup_logging
+from obsidian_tools.common import backup_file, ask_user_confirmation, find_markdown_files
+from obsidian_tools.logging_utils import setup_logging
 
 # Regular expressions for detecting dataview code blocks and limit clauses
 START_BLOCK_RE = re.compile(r"^```\s*dataview\s*$", re.IGNORECASE)
