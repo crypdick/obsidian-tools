@@ -43,7 +43,11 @@ def resolve_directory_path(directory: Path) -> Path:
     if directory.is_absolute():
         return directory
     else:
-        vault_path = os.getenv("VAULT_PATH", ".")
+        if "VAULT_PATH" not in os.environ:
+            raise ValueError(
+                "VAULT_PATH is not set in the environment. Did you create a .env file?"
+            )
+        vault_path = os.getenv("VAULT_PATH")
         return Path(vault_path) / directory
 
 
